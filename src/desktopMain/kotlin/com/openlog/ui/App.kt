@@ -113,8 +113,14 @@ fun App() {
                                 }
                                 CtxItem("◆", "Add to annotation") { state.requestAddAnn(ctx.tabId, listOf(ctx.entryId)) }
                                 Box(Modifier.fillMaxWidth().height(1.dp).background(tc.br))
+                                if (selCount > 1) {
+                                    CtxItem("⎘", "Copy $selCount selected lines") {
+                                        state.copySelectedLines(ctx.tabId); state.ctx = null
+                                    }
+                                }
                                 CtxItem("⎘", "Copy line") {
-                                    state.copyToClipboard("${entry.ts}  ${entry.level.key}/${entry.tag}: ${entry.msg}")
+                                    val pid = if (entry.pid > 0) "  ${entry.pid.toString().padStart(5)} ${entry.tid.toString().padStart(5)}" else ""
+                                    state.copyToClipboard("${entry.ts}$pid  ${entry.level.key}  ${entry.tag}: ${entry.msg}")
                                     state.ctx = null
                                 }
                                 CtxItem("M↓", "Copy as Markdown") {
@@ -274,7 +280,8 @@ private fun FileView(state: AppState, tab: LogTab) {
                 onOpenSFDialog      = { state.sfDialog = true; state.sfTabId = tab.id; state.sfName = "" },
                 onSetKwInTag        = { state.setKwInTag(tab.id, it) },
                 onToggleKwInTagRx   = { state.toggleKwInTagRx(tab.id) },
-                onSetPkgPrefix      = { state.setPkgPrefix(tab.id, it) },
+                onAddPkgPrefix      = { state.addPkgPrefix(tab.id, it) },
+                onRemovePkgPrefix   = { state.removePkgPrefix(tab.id, it) },
                 onSetPidTidFilter   = { state.setPidTidFilter(tab.id, it) },
                 onExportFilters     = { state.exportFiltersToFile() },
                 onImportFilters     = { state.importFiltersFromFile() },
@@ -363,7 +370,8 @@ private fun CompareView(state: AppState) {
             onOpenSFDialog      = { state.sfDialog = true; state.sfTabId = tab.id; state.sfName = "" },
             onSetKwInTag        = { state.setKwInTag(tab.id, it) },
             onToggleKwInTagRx   = { state.toggleKwInTagRx(tab.id) },
-            onSetPkgPrefix      = { state.setPkgPrefix(tab.id, it) },
+            onAddPkgPrefix      = { state.addPkgPrefix(tab.id, it) },
+            onRemovePkgPrefix   = { state.removePkgPrefix(tab.id, it) },
             onSetPidTidFilter   = { state.setPidTidFilter(tab.id, it) },
             onExportFilters     = { state.exportFiltersToFile() },
             onImportFilters     = { state.importFiltersFromFile() },

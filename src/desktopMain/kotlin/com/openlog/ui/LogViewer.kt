@@ -188,7 +188,6 @@ private fun LogRow(
     val density  = LocalDensity.current.density
     val entry    = item.entry
     val isSel    = entry.id in tab.selected
-    val isAnn    = tab.annotations.blocks.filterIsInstance<AnnBlock.LogRef>().any { entry.id in it.logIds }
     var hov      by remember { mutableStateOf(false) }
     var rowRoot  by remember { mutableStateOf(Offset.Zero) }
     var sel      by remember(entry.id) { mutableStateOf(TextRange.Zero) }
@@ -204,7 +203,6 @@ private fun LogRow(
         Modifier
             .fillMaxWidth()
             .background(bg)
-            .run { if (isAnn) border(BorderStroke(2.dp, tc.ac)) else this }
             .onGloballyPositioned { coords ->
                 val pos = coords.positionInRoot()
                 rowBoundsAbs[entry.id] = pos.y to (pos.y + coords.size.height)
@@ -265,7 +263,6 @@ private fun LogRow(
             cursorBrush   = SolidColor(Color.Transparent),
             modifier      = Modifier.weight(1f),
         )
-        if (isAnn) AppText("◆", color = tc.ac, fontSize = 10.sp)
     }
 }
 

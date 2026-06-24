@@ -44,7 +44,7 @@ data class Filter(
     // TAGS-mode secondary filters
     val kwInTag: String = "",           // message text filter applied within tag result set
     val kwInTagRegex: Boolean = false,
-    val pkgPrefix: String = "",         // tag prefix — e.g. "com.myapp" matches com.myapp.* tags
+    val pkgPrefixes: Set<String> = emptySet(), // tag prefixes — each matches com.foo.* tags
     // PID / TID
     val pidTidFilter: String = "",      // comma-separated PIDs/TIDs to include
 )

@@ -6,6 +6,7 @@ import com.openlog.model.*
 import com.openlog.utils.buildMd
 import com.openlog.utils.computeSeqGroups
 import com.openlog.utils.parseLogcat
+import com.openlog.utils.passesFilter
 import java.awt.FileDialog
 import java.awt.Frame
 import java.awt.Toolkit
@@ -88,7 +89,8 @@ class AppState {
     fun toggleExcludeKwRx(tabId: String) = upFlt(tabId) { it.copy(excludeKwRegex = !it.excludeKwRegex) }
     fun setKwInTag(tabId: String, v: String) = upFlt(tabId) { it.copy(kwInTag = v) }
     fun toggleKwInTagRx(tabId: String) = upFlt(tabId) { it.copy(kwInTagRegex = !it.kwInTagRegex) }
-    fun setPkgPrefix(tabId: String, v: String) = upFlt(tabId) { it.copy(pkgPrefix = v) }
+    fun addPkgPrefix(tabId: String, v: String) { if (v.isNotBlank()) upFlt(tabId) { it.copy(pkgPrefixes = it.pkgPrefixes + v.trim()) } }
+    fun removePkgPrefix(tabId: String, v: String) = upFlt(tabId) { it.copy(pkgPrefixes = it.pkgPrefixes - v) }
     fun setPidTidFilter(tabId: String, v: String) = upFlt(tabId) { it.copy(pidTidFilter = v) }
 
     // ── Highlighters ────────────────────────────────────────────────
@@ -198,12 +200,12 @@ class AppState {
         val n = when {
             multi -> if (id in t.selected) t.selected - id else t.selected + id
             range -> {
-                val ids = t.logData.map { it.id }
-                val last = t.selected.maxOrNull()
+                val visIds = t.logData.filter { passesFilter(it, t.filter) }.map { it.id }.ifEmpty { t.logData.map { it.id } }
+                val last = t.selected.lastOrNull { it in visIds.toSet() } ?: t.selected.maxOrNull()
                 if (last == null) setOf(id)
                 else {
-                    val a = ids.indexOf(last); val b = ids.indexOf(id)
-                    if (a >= 0 && b >= 0) ids.subList(minOf(a, b), maxOf(a, b) + 1).toSet() else t.selected + id
+                    val a = visIds.indexOf(last); val b = visIds.indexOf(id)
+                    if (a >= 0 && b >= 0) visIds.subList(minOf(a, b), maxOf(a, b) + 1).toSet() else t.selected + id
                 }
             }
             else  -> if (t.selected == setOf(id)) emptySet() else setOf(id)
@@ -211,7 +213,7 @@ class AppState {
         t.copy(selected = n)
     }
     fun selRowRange(tabId: String, fromId: Int, toId: Int) = upTab(tabId) { t ->
-        val ids = t.logData.map { it.id }
+        val ids = t.logData.filter { passesFilter(it, t.filter) }.map { it.id }.ifEmpty { t.logData.map { it.id } }
         val a = ids.indexOf(fromId); val b = ids.indexOf(toId)
         if (a < 0 || b < 0) return@upTab t
         t.copy(selected = ids.subList(minOf(a, b), maxOf(a, b) + 1).toSet())
@@ -236,9 +238,12 @@ class AppState {
     }
     fun confirmAddAnn(tabId: String, logIds: List<Int>, caption: String) {
         upTab(tabId) { t ->
-            val existing = t.annotations.blocks.filterIsInstance<AnnBlock.LogRef>().flatMap { it.logIds }.toSet()
-            val newIds = logIds.filter { it !in existing }.ifEmpty { logIds }
-            val block = AnnBlock.LogRef("lr${System.currentTimeMillis()}", newIds, caption)
+            val lines = logIds.sorted().mapNotNull { t.rmap[it] }.joinToString("\n") { e ->
+                val pid = if (e.pid > 0) "  ${e.pid.toString().padStart(5)} ${e.tid.toString().padStart(5)}" else ""
+                "${e.ts}$pid  ${e.level.key}  ${e.tag}: ${e.msg}"
+            }
+            val body = if (caption.isNotBlank()) "$caption\n\n```\n$lines\n```" else "```\n$lines\n```"
+            val block = AnnBlock.Note("n${System.currentTimeMillis()}", body)
             t.copy(annotations = t.annotations.copy(blocks = t.annotations.blocks + block))
         }
         addAnnRequest = null
@@ -277,6 +282,23 @@ class AppState {
     fun toggleMd(tabId: String) = upTab(tabId) { it.copy(showAnnMd = !it.showAnnMd) }
 
     // ── Context menu shortcuts ───────────────────────────────────────
+
+    // Given raw selected text (which may span ts/pid/tid/level/tag/msg),
+    // extract the message portion suitable for pattern matching in entry.msg.
+    private fun extractMsgText(sel: String, entry: LogEntry): String {
+        val s = sel.trim()
+        if (s.isBlank()) return entry.msg
+        // Selection ends with the full message but has leading noise: return just the message
+        if (s.endsWith(entry.msg) && s.length > entry.msg.length) return entry.msg
+        // Selection starts with "tag: " prefix: strip it
+        val prefix = "${entry.tag}: "
+        if (s.startsWith(prefix)) {
+            val rest = s.removePrefix(prefix)
+            if (rest.isNotBlank()) return rest
+        }
+        return s
+    }
+
     fun addTagFilterFromCtx() {
         val c = ctx ?: return; toggleTag(c.tabId, tab(c.tabId)?.rmap?.get(c.entryId)?.tag ?: return); ctx = null
     }
@@ -285,7 +307,8 @@ class AppState {
     }
     fun addHlFromCtx() {
         val c = ctx ?: return
-        val text = c.selText.ifBlank { tab(c.tabId)?.rmap?.get(c.entryId)?.msg } ?: return
+        val entry = tab(c.tabId)?.rmap?.get(c.entryId) ?: return
+        val text = if (c.selText.isBlank()) entry.msg else extractMsgText(c.selText, entry)
         addHl(c.tabId, text, false, newHlColor); ctx = null
     }
     fun addHlTagFromCtx() {
@@ -295,20 +318,31 @@ class AppState {
     }
     fun addSeqFromCtx() {
         val c = ctx ?: return
-        val text = c.selText.ifBlank { tab(c.tabId)?.rmap?.get(c.entryId)?.msg } ?: return
+        val entry = tab(c.tabId)?.rmap?.get(c.entryId) ?: return
+        val text = if (c.selText.isBlank()) entry.msg else extractMsgText(c.selText, entry)
         addSequence(text, false, newSeqColor); ctx = null
     }
     fun addNegKwFromCtx() {
         val c = ctx ?: return
-        val text = c.selText.ifBlank { tab(c.tabId)?.rmap?.get(c.entryId)?.msg } ?: return
+        val entry = tab(c.tabId)?.rmap?.get(c.entryId) ?: return
+        val text = if (c.selText.isBlank()) entry.msg else extractMsgText(c.selText, entry)
         setExcludeKw(c.tabId, text); ctx = null
     }
     fun addKwFilterFromCtx() {
         val c = ctx ?: return
-        val text = c.selText.ifBlank { tab(c.tabId)?.rmap?.get(c.entryId)?.msg } ?: return
+        val entry = tab(c.tabId)?.rmap?.get(c.entryId) ?: return
+        val text = if (c.selText.isBlank()) entry.msg else extractMsgText(c.selText, entry)
         setFilterMode(c.tabId, FilterMode.KEYWORD)
         setKw(c.tabId, text)
         ctx = null
+    }
+    fun copySelectedLines(tabId: String) {
+        val t = tab(tabId) ?: return
+        val text = t.selected.sorted().mapNotNull { id -> t.rmap[id] }.joinToString("\n") { e ->
+            val pid = if (e.pid > 0) "  ${e.pid.toString().padStart(5)} ${e.tid.toString().padStart(5)}" else ""
+            "${e.ts}$pid  ${e.level.key}  ${e.tag}: ${e.msg}"
+        }
+        copyToClipboard(text)
     }
 
     // ── Tab management ───────────────────────────────────────────────

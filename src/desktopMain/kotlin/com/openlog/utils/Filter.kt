@@ -22,11 +22,10 @@ fun passesFilter(entry: LogEntry, filter: Filter): Boolean {
     return when (filter.mode) {
         FilterMode.TAGS -> {
             // Tag passes if: no active-tag / prefix filter  OR  exact match  OR  prefix match
-            val hasTagFilter = filter.activeTags.isNotEmpty() || filter.pkgPrefix.isNotBlank()
+            val hasTagFilter = filter.activeTags.isNotEmpty() || filter.pkgPrefixes.isNotEmpty()
             val tagPass = if (hasTagFilter) {
                 entry.tag in filter.activeTags ||
-                (filter.pkgPrefix.isNotBlank() &&
-                    (entry.tag == filter.pkgPrefix || entry.tag.startsWith(filter.pkgPrefix + ".")))
+                filter.pkgPrefixes.any { pfx -> entry.tag == pfx || entry.tag.startsWith("$pfx.") }
             } else true
             if (!tagPass) return false
             // Secondary message keyword filter within the tag result set

@@ -3,6 +3,8 @@ package com.openlog.ui
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openlog.model.*
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FilterPanel(
     tab: LogTab,
@@ -56,7 +59,8 @@ fun FilterPanel(
     onOpenSFDialog: () -> Unit,
     onSetKwInTag: (String) -> Unit,
     onToggleKwInTagRx: () -> Unit,
-    onSetPkgPrefix: (String) -> Unit,
+    onAddPkgPrefix: (String) -> Unit,
+    onRemovePkgPrefix: (String) -> Unit,
     onSetPidTidFilter: (String) -> Unit,
     onExportFilters: () -> Unit,
     onImportFilters: () -> Unit,
@@ -118,7 +122,11 @@ fun FilterPanel(
             }) else null)
 
             if (filter.activeTags.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     filter.activeTags.forEach { tag ->
                         TagPill(tag, tc.ac) { onToggleTag(tag) }
                     }
@@ -186,10 +194,23 @@ fun FilterPanel(
             }
             // ── Package prefix ───────────────────────────────────
             SectionHeader("PACKAGE / TAG PREFIX")
+            if (filter.pkgPrefixes.isNotEmpty()) {
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    filter.pkgPrefixes.forEach { pfx ->
+                        TagPill(pfx, Color(0xFF06b6d4)) { onRemovePkgPrefix(pfx) }
+                    }
+                }
+            }
+            var pkgInput by remember { mutableStateOf("") }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                InlineField(filter.pkgPrefix, onSetPkgPrefix, "com.myapp.example…", Modifier.weight(1f))
-                if (filter.pkgPrefix.isNotBlank())
-                    AppText("×", color = tc.td, fontSize = 14.sp, modifier = Modifier.clickable { onSetPkgPrefix("") })
+                InlineField(pkgInput, { pkgInput = it }, "com.myapp.example…", Modifier.weight(1f))
+                PillBtn("+ Add", active = pkgInput.isNotBlank()) {
+                    onAddPkgPrefix(pkgInput); pkgInput = ""
+                }
             }
 
             // ── Message keyword within tag result set ─────────────
