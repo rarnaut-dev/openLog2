@@ -1,0 +1,115 @@
+package com.openlog.model
+
+import androidx.compose.ui.graphics.Color
+
+enum class LogLevel(val key: Char, val label: String, val defaultColor: Color) {
+    V('V', "Verbose", Color(0xFF6e7681)),
+    D('D', "Debug",   Color(0xFF79c0ff)),
+    I('I', "Info",    Color(0xFF3fb950)),
+    W('W', "Warn",    Color(0xFFd29922)),
+    E('E', "Error",   Color(0xFFf85149)),
+    A('A', "Assert",  Color(0xFFff7b72));
+    companion object { fun from(c: Char) = entries.find { it.key == c } ?: V }
+}
+
+data class LogEntry(val id: Int, val ts: String, val level: LogLevel, val tag: String, val msg: String, val pid: Int = 0, val tid: Int = 0)
+
+// ── Sequences ──────────────────────────────────────────────────────
+data class SequenceDef(
+    val id: String,
+    val matchText: String,
+    val isRegex: Boolean = false,
+    val priority: Int,
+    val color: Color,
+    val enabled: Boolean = true,
+)
+
+data class NestedSeqGroup(val gid: String, val rid: Int, val ch: List<Int>)
+data class SeqGroup(val gid: String, val rid: Int, val plain: List<Int>, val nested: List<NestedSeqGroup>, val defId: String)
+
+// ── Filter ─────────────────────────────────────────────────────────
+enum class FilterMode { TAGS, KEYWORD }
+
+data class Filter(
+    val levels: Set<LogLevel> = LogLevel.entries.toSet(),
+    val activeTags: Set<String> = emptySet(),
+    val kwText: String = "",
+    val kwRegex: Boolean = false,
+    val mode: FilterMode = FilterMode.TAGS,
+    val excludeTags: Set<String> = emptySet(),
+    val excludeKw: String = "",
+    val excludeKwRegex: Boolean = false,
+    val highlighters: List<Highlighter> = emptyList(),
+    val seqOn: Boolean = true,
+    // TAGS-mode secondary filters
+    val kwInTag: String = "",           // message text filter applied within tag result set
+    val kwInTagRegex: Boolean = false,
+    val pkgPrefix: String = "",         // tag prefix — e.g. "com.myapp" matches com.myapp.* tags
+    // PID / TID
+    val pidTidFilter: String = "",      // comma-separated PIDs/TIDs to include
+)
+
+data class Highlighter(val id: String, val pattern: String, val regex: Boolean, val color: Color, val on: Boolean)
+
+// ── Annotations (block model) ──────────────────────────────────────
+sealed class AnnBlock {
+    abstract val id: String
+    /** Pure text / commentary block */
+    data class Note(override val id: String, val text: String) : AnnBlock()
+    /** One or more log lines with an optional caption */
+    data class LogRef(override val id: String, val logIds: List<Int>, val caption: String) : AnnBlock()
+}
+
+data class Annotations(
+    val blocks: List<AnnBlock> = emptyList(),
+    val prefix: String = "",
+    val suffix: String = "",
+)
+
+// ── Tab ────────────────────────────────────────────────────────────
+data class LogTab(
+    val id: String,
+    val filename: String,
+    val logData: List<LogEntry>,
+    val rmap: Map<Int, LogEntry>,
+    val filter: Filter = Filter(),
+    val showUnfiltered: Boolean = false,
+    val expanded: Set<String> = emptySet(),
+    val selected: Set<Int> = emptySet(),
+    val annotations: Annotations = Annotations(),
+    val showAnnMd: Boolean = false,
+)
+
+data class SavedFilter(
+    val id: String, val name: String,
+    val levels: Set<LogLevel>, val activeTags: Set<String>,
+    val kwText: String, val kwRegex: Boolean, val mode: FilterMode,
+    val excludeTags: Set<String>, val excludeKw: String, val excludeKwRegex: Boolean,
+    val highlighters: List<Highlighter>, val seqOn: Boolean,
+)
+
+// ── Settings ───────────────────────────────────────────────────────
+data class AppSettings(
+    val theme: ThemePreset = ThemePreset.DARK_GITHUB,
+    val fontSize: Int = 12,
+    val fontMono: Boolean = true,
+    val defaultSaveDir: String? = null,
+)
+
+enum class ThemePreset(val label: String) {
+    DARK_GITHUB("Dark (GitHub)"),
+    LIGHT("Light"),
+    DRACULA("Dracula"),
+    SOLARIZED_DARK("Solarized Dark"),
+}
+
+// ── Misc ───────────────────────────────────────────────────────────
+data class CtxMenuState(val tabId: String, val entryId: Int, val x: Float, val y: Float, val selText: String)
+
+// Request to open the add-annotation dialog
+data class AddAnnRequest(val tabId: String, val logIds: List<Int>)
+
+sealed class LogItem {
+    data class Row(val entry: LogEntry, val indent: Int) : LogItem()
+    data class SeqHeader(val entry: LogEntry, val gid: String, val indent: Int, val expanded: Boolean, val count: Int, val color: Color) : LogItem()
+}
