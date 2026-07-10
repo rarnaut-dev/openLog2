@@ -19,7 +19,7 @@ plugins {
 
 // MCP SDK 0.14.0 is built with Kotlin 2.3.21 (consumable by our 2.4.0 compiler) and Ktor 3.4.3;
 // it exposes the mcpStreamableHttp {} Ktor helper the older 0.8.x line lacked.
-val ktorVersion = "3.4.3"
+val ktorVersion = "3.5.1"
 
 val appVersion: String = providers.gradleProperty("app.version").get()
 val appAuthor = "Roman Arnaut"
